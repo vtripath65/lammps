@@ -8,9 +8,15 @@ Syntax
 
 .. code-block:: LAMMPS
 
-    pair_style mbx cutoff
+    pair_style mbx cutoff keyword
 
 * cutoff = real-space cutoff for MBX in Angstroms
+* zero or one keyword may be appended
+* keyword = *energy/full*
+
+  .. parsed-literal::
+
+       *energy/full* = compute all MBX terms with a single call into MBX (serial runs only)
 
 
 Examples
@@ -175,6 +181,25 @@ The *print/settings* argument optionally will print the MBX settings to the LAMM
 logfile at the start of the simulation. This is optionally used for debugging and
 ensuring that the settings are being correctly applied.
 
+.. versionadded:: TBD
+
+The optional *energy/full* keyword makes the pair style request the
+complete MBX energy, forces, and virial with a single call into MBX
+for the whole periodic system, instead of requesting each term
+separately.  When the MBX library was compiled with GPU support, this is
+the only way to have the 1-body, 2-body, and 3-body terms computed on
+the GPU.  This keyword can only be used for runs on a single MPI
+process.  With this keyword, the individual energy terms are not
+available, so :doc:`compute pair mbx <compute_pair>` only provides the
+total MBX energy.  Whether 4-body terms are included depends on the MBX
+version in use.  With this keyword, the MBX setup (including any GPU
+data) is created at the start of a run and reused when the neighbor
+lists are rebuilt.  It is only recreated when the number of atoms
+changes or when LAMMPS reorders the atoms in memory, which it does
+periodically unless atom sorting is turned off with
+:doc:`atom_modify sort 0 0.0 <atom_modify>`, as is recommended with
+this keyword.
+
 
 Restrictions
 """"""""""""
@@ -192,6 +217,8 @@ LAMMPS such as using `coul/cut` or `coul/long` when also using MBX.
 See the warning above for more details.
 
 MBX currently only supports :doc:`processors <processors>` mapping style `xyz`.
+
+The *energy/full* keyword requires a run on a single MPI process.
 
 MBX is primarily tested to work with `units real` and `atom_style full`. If you encounter
 issues with other unit or atom styles, please contact the MBX developers.

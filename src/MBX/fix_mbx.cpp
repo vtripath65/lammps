@@ -411,6 +411,8 @@ FixMBX::FixMBX(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg)
   pair_mbx = nullptr;
   pair_mbx = (PairMBX *) force->pair_match("^mbx", 0);
   if (!pair_mbx) error->all(FLERR, "[MBX] Pair mbx is missing");
+  if (pair_mbx->energy_full && (nprocs > 1))
+    error->all(FLERR, "[MBX] Pair style mbx keyword energy/full requires a serial run");
 
   array_atom = nullptr;
   mbx_dip = nullptr;
@@ -491,6 +493,8 @@ FixMBX::FixMBX(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg)
   }
 
   first_step = true;
+  force_rebuild = true;
+  mbx_num_reuse = 0;
 
   // MBX currently requires 4-byte tags
 
@@ -598,6 +602,14 @@ void FixMBX::init()
 
   ngroup = group->count(igroup);
   if (ngroup == 0) error->all(FLERR, "[MBX] Fix mbx group has no atoms");
+
+  mbx_check_settings();
+
+  if (pair_mbx->energy_full && (atom->sortfreq > 0) && (comm->me == 0))
+    utils::logmesg(lmp,
+                   "[MBX] Atom sorting every {} steps forces a new MBX setup each time; use "
+                   "'atom_modify sort 0 0.0' to avoid it with energy/full\n",
+                   atom->sortfreq);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -670,6 +682,7 @@ void FixMBX::setup_post_neighbor()
 
   // MRR Call function to fill up arrays
   mbx_fill_system_information_from_atom();
+  force_rebuild = true;
   post_neighbor();
 
   first_step = false;
@@ -682,6 +695,25 @@ void FixMBX::post_neighbor()
   // setup after neighbor build
 
   mbx_fill_system_information_from_atom();
+
+  // with energy/full the MBX instance only depends on the sequence of molecules,
+  // since MBX applies periodic boundaries itself and coordinates are updated every step.
+  // keep it (and its GPU setup) if that sequence did not change.
+
+  if (pair_mbx->energy_full && !force_rebuild && mbx_impl->ptr_mbx_local) {
+    mbx_set_mol_local();
+    if (mbx_local_sequence() == mbx_local_seq) {
+      if (aspc_step == aspc_step_reset) {
+        mbx_impl->ptr_mbx_local->ResetDipoleHistory();
+        aspc_num_hist = 0;
+        aspc_step = 0;
+      }
+      if (mbx_aspc_enabled) aspc_step++;
+      ++mbx_num_reuse;
+      return;
+    }
+  }
+  force_rebuild = false;
 
   // tear down existing MBX objects
 
@@ -713,7 +745,8 @@ void FixMBX::post_neighbor()
 
   // recreate main instance of MBX object
 
-  mbx_impl->ptr_mbx = new bblock::System();
+  mbx_impl->ptr_mbx = nullptr;
+  if (!pair_mbx->energy_full) mbx_impl->ptr_mbx = new bblock::System();
   mbx_impl->ptr_mbx_local = new bblock::System();
 
   // initialize all MBX instances
@@ -724,7 +757,7 @@ void FixMBX::post_neighbor()
     aspc_step = 0;
   }
 
-  mbx_init();
+  if (!pair_mbx->energy_full) mbx_init();
   mbx_init_local();
 
   if (mbx_aspc_enabled) aspc_step++;
@@ -770,7 +803,7 @@ void FixMBX::pre_force(int /*vflag*/)
   // update coordinates in MBX objects
 
   if (has_gcmc) post_neighbor();
-  mbx_update_xyz();
+  if (!pair_mbx->energy_full) mbx_update_xyz();
   mbx_update_xyz_local();
 }
 
@@ -1173,13 +1206,26 @@ void FixMBX::mbx_init()
   std::vector<double> box;
   mbx_impl->ptr_mbx->SetPBC(box);
 
-  // check for incompatible pair styles
+  mbxt_stop(MBXT_LABELS::INIT);
+}
+
+/* ----------------------------------------------------------------------
+   check for pair styles incompatible with MBX
+------------------------------------------------------------------------- */
+
+void FixMBX::mbx_check_settings()
+{
   // electrostatics should be handled entirely by MBX
   Pair *pairstyles_coullong = force->pair_match(".*coul/long.*", 0);
   Pair *pairstyles_coulcut = force->pair_match(".*coul/cut.*", 0);
   Pair *pairstyles_coulexclude = force->pair_match("coul/exclude", 0);
 
-  if (!pairstyles_coulexclude && mbx_num_ext > 0)
+  // any dp1 monomer type means external charges may be present
+  bool has_ext = false;
+  for (int i = 0; i < num_mol_types; ++i)
+    if (strcmp("dp1", mol_names[i]) == 0) has_ext = true;
+
+  if (!pairstyles_coulexclude && has_ext && (comm->me == 0))
     error->warning(FLERR,
                    "[MBX] dp1 monomers present, but coul/exclude pair style not found. If using "
                    "special_bonds, please include coul/exclude: ");
@@ -1193,26 +1239,16 @@ void FixMBX::mbx_init()
                "[MBX] Incompatible  coul/long pair style: coulombic interactions should be "
                "handled internally by MBX: ");
   }
-
-  mbxt_stop(MBXT_LABELS::INIT);
 }
 
 /* ----------------------------------------------------------------------
-   Initialize new MBX instance with all molecules that have local atom
+   flag anchors of molecules with at least one local atom, each molecule once
 ------------------------------------------------------------------------- */
 
-void FixMBX::mbx_init_local()
+void FixMBX::mbx_set_mol_local()
 {
-  mbxt_start(MBXT_LABELS::INIT_LOCAL);
-
   const int nlocal = atom->nlocal;
   const int nall = nlocal + atom->nghost;
-  tagint *tag = atom->tag;
-  double **x = atom->x;
-  double *q = atom->q;
-
-  mbx_num_atoms_local = 0;
-  mbx_num_ext_local = 0;
 
   for (int i = 0; i < nall; ++i) {
     mol_local[i] = 0;
@@ -1244,6 +1280,54 @@ void FixMBX::mbx_init_local()
       }
     }
   }
+}
+
+/* ----------------------------------------------------------------------
+   anchor IDs of the molecules in the order they are passed to the local MBX instance
+   external charges are stored as negative IDs
+------------------------------------------------------------------------- */
+
+std::vector<tagint> FixMBX::mbx_local_sequence()
+{
+  const int nall = atom->nlocal + atom->nghost;
+  std::vector<tagint> seq;
+
+  for (int i = 0; i < nall; ++i) {
+    if (mol_anchor[i] && mol_local[i]) {
+      const tagint anchor = atom->tag[i];
+      if (strcmp("dp1", mol_names[mol_type[i]]) == 0) {
+        seq.push_back(-anchor);
+      } else {
+        bool is_ext = false;
+        const int na = get_num_atoms_per_monomer(mol_names[mol_type[i]], is_ext);
+        bool add_monomer = true;
+        for (int j = 1; j < na; ++j)
+          if (atom->map(anchor + j) == -1) add_monomer = false;
+        if (add_monomer) seq.push_back(anchor);
+      }
+    }
+  }
+  return seq;
+}
+
+/* ----------------------------------------------------------------------
+   Initialize new MBX instance with all molecules that have local atom
+------------------------------------------------------------------------- */
+
+void FixMBX::mbx_init_local()
+{
+  mbxt_start(MBXT_LABELS::INIT_LOCAL);
+
+  const int nlocal = atom->nlocal;
+  const int nall = nlocal + atom->nghost;
+  tagint *tag = atom->tag;
+  double **x = atom->x;
+  double *q = atom->q;
+
+  mbx_num_atoms_local = 0;
+  mbx_num_ext_local = 0;
+
+  mbx_set_mol_local();
 
   std::vector<size_t> molec;
 
@@ -1426,7 +1510,7 @@ void FixMBX::mbx_init_local()
   // check if using cg or aspc integrator for MBX dipoles
 
   if (first_step) {
-    std::string dip_method = mbx_impl->ptr_mbx->GetDipoleMethod();
+    std::string dip_method = mbx_impl->ptr_mbx_local->GetDipoleMethod();
 
     if (dip_method == "aspc") {
       mbx_aspc_enabled = true;
@@ -1438,6 +1522,8 @@ void FixMBX::mbx_init_local()
   }
 
   if (mbx_aspc_enabled) mbx_init_dipole_history_local();
+
+  mbx_local_seq = mbx_local_sequence();
 
   mbxt_stop(MBXT_LABELS::INIT_LOCAL);
 }
@@ -1825,6 +1911,10 @@ void FixMBX::mbxt_write_summary()
   mbxt_print_time("INIT_LOCAL", MBXT_LABELS::INIT_LOCAL, t);
   mbxt_print_time("UPDATE_XYZ_LOCAL", MBXT_LABELS::UPDATE_XYZ_LOCAL, t);
   mbxt_print_time("ACCUMULATE_F_LOCAL", MBXT_LABELS::ACCUMULATE_F_LOCAL, t);
+  mbxt_print_time("ENERGY_FULL", MBXT_LABELS::ENERGY_FULL, t);
+  if (mbx_num_reuse > 0)
+    utils::logmesg(lmp, "[MBX] Neighbor list builds that reused the MBX setup: {}\n",
+                   mbx_num_reuse);
 
   utils::logmesg(
       lmp,

@@ -41,6 +41,7 @@ class PairMBX : public Pair {
 
  protected:
   double cut_global;
+  int energy_full;    // 1 if all MBX terms are computed with a single System::Energy() call
 
   int me;
 

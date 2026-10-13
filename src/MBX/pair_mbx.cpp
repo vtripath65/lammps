@@ -71,6 +71,7 @@ PairMBX::PairMBX(LAMMPS *lmp) : Pair(lmp)
   one_coeff = 1;
 
   mbx_total_energy = 0;
+  energy_full = 0;
 
   me = comm->me;
 
@@ -98,6 +99,25 @@ void PairMBX::compute(int eflag, int vflag)
 {
 
   ev_init(eflag, vflag);
+
+  // serial only: all terms from one MBX call on the periodic system of local molecules
+  // this is the only path that uses the GPU 1B/2B/3B kernels of a CUDA-enabled MBX
+
+  if (energy_full) {
+    for (int i = 0; i < 6; ++i) mbx_virial[i] = 0.0;
+    mbx_total_energy = 0.0;
+
+    if (fix_MBX->mbx_num_atoms_local + fix_MBX->mbx_num_ext_local > 0) {
+      fix_MBX->mbxt_start(FixMBX::MBXT_LABELS::ENERGY_FULL);
+      mbx_total_energy = fix_MBX->mbx_impl->ptr_mbx_local->Energy(true);
+      fix_MBX->mbxt_stop(FixMBX::MBXT_LABELS::ENERGY_FULL);
+      accumulate_f_local(true);
+    }
+
+    for (int i = 0; i < 6; ++i) virial[i] += mbx_virial[i];
+    if (evflag) eng_vdwl = mbx_total_energy;
+    return;
+  }
 
   // compute energy+gradients in parallel
 
@@ -242,10 +262,24 @@ void PairMBX::allocate()
 
 void PairMBX::settings(int narg, char **arg)
 {
-  if (narg != 1) error->all(FLERR, "Illegal pair_style command");
+  if (narg < 1) utils::missing_cmd_args(FLERR, "pair_style mbx", error);
 
   cut_global = utils::numeric(FLERR, arg[0], false, lmp);
 
+  energy_full = 0;
+  int iarg = 1;
+  while (iarg < narg) {
+    if (strcmp(arg[iarg], "energy/full") == 0) {
+      energy_full = 1;
+      ++iarg;
+    } else {
+      error->all(FLERR, iarg, "Unknown pair_style mbx keyword: {}", arg[iarg]);
+    }
+  }
+
+  // per-term energies are not available with a single MBX call
+
+  nextra = energy_full ? 0 : 10;
 }
 
 /* ----------------------------------------------------------------------
