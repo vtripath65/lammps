@@ -270,6 +270,8 @@
 /fix_mbx.h
 /pair_mbx.cpp
 /pair_mbx.h
+/pair_gpumbx.cpp
+/pair_gpumbx.h
 /dump_molfile.cpp
 /dump_molfile.h
 /molfile_interface.cpp

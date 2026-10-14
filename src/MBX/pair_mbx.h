@@ -22,6 +22,9 @@ PairStyle(mbx, PairMBX)
 
 #include "pair.h"
 
+namespace bblock {
+class System;
+}
 
 namespace LAMMPS_NS {
   class FixMBX;
@@ -41,7 +44,7 @@ class PairMBX : public Pair {
 
  protected:
   double cut_global;
-  int energy_full;    // 1 if all MBX terms are computed with a single System::Energy() call
+  int energy_full;    // 1 if all MBX terms come from a single System::Energy() call
 
   int me;
 
@@ -65,6 +68,8 @@ class PairMBX : public Pair {
   void accumulate_f(bool);
   void accumulate_f_all(bool);    // local + ghost
   void accumulate_f_local(bool);
+
+  bblock::System *mbx_local();    // MBX instance with molecules that have local atoms
 };
 
 }    // namespace LAMMPS_NS

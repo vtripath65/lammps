@@ -409,10 +409,11 @@ FixMBX::FixMBX(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg)
   // verify that this fix is not called directly
   // fix mbx should only be called indirectly by pair mbx
   pair_mbx = nullptr;
-  pair_mbx = (PairMBX *) force->pair_match("^mbx", 0);
+  pair_mbx = dynamic_cast<PairMBX *>(force->pair_match("^mbx", 0));
+  if (!pair_mbx) pair_mbx = dynamic_cast<PairMBX *>(force->pair_match("^gpumbx", 0));
   if (!pair_mbx) error->all(FLERR, "[MBX] Pair mbx is missing");
   if (pair_mbx->energy_full && (nprocs > 1))
-    error->all(FLERR, "[MBX] Pair style mbx keyword energy/full requires a serial run");
+    error->all(FLERR, "[MBX] Pair style gpumbx requires a serial run");
 
   array_atom = nullptr;
   mbx_dip = nullptr;
@@ -608,7 +609,7 @@ void FixMBX::init()
   if (pair_mbx->energy_full && (atom->sortfreq > 0) && (comm->me == 0))
     utils::logmesg(lmp,
                    "[MBX] Atom sorting every {} steps forces a new MBX setup each time; use "
-                   "'atom_modify sort 0 0.0' to avoid it with energy/full\n",
+                   "'atom_modify sort 0 0.0' to avoid it with gpumbx\n",
                    atom->sortfreq);
 }
 
@@ -696,7 +697,7 @@ void FixMBX::post_neighbor()
 
   mbx_fill_system_information_from_atom();
 
-  // with energy/full the MBX instance only depends on the sequence of molecules,
+  // with gpumbx the MBX instance only depends on the sequence of molecules,
   // since MBX applies periodic boundaries itself and coordinates are updated every step.
   // keep it (and its GPU setup) if that sequence did not change.
 

@@ -206,6 +206,7 @@ accelerated styles exist.
 * :doc:`gauss <pair_gauss>` - Gaussian potential
 * :doc:`gauss/cut <pair_gauss>` - generalized Gaussian potential
 * :doc:`gayberne <pair_gayberne>` - Gay-Berne ellipsoidal potential
+* :doc:`gpumbx <pair_mbx>` - MBX potential with a single MBX energy evaluation (GPU-capable)
 * :doc:`granular <pair_granular>` - Generalized granular potential
 * :doc:`granular/superellipsoid <pair_granular_superellipsoid>` - Generalized granular potential for superellipsoids
 * :doc:`gran/hertz/history <pair_gran>` - granular potential with Hertzian interactions

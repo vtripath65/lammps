@@ -1,22 +1,29 @@
 .. index:: pair_style mbx
+.. index:: pair_style gpumbx
 
 pair_style mbx command
 ======================
+
+pair_style gpumbx command
+=========================
 
 Syntax
 """"""
 
 .. code-block:: LAMMPS
 
-    pair_style mbx cutoff keyword
+    pair_style mbx cutoff
+    pair_style gpumbx cutoff keyword value
 
 * cutoff = real-space cutoff for MBX in Angstroms
-* zero or one keyword may be appended
-* keyword = *energy/full*
+* zero or one keyword/value pair may be appended to *gpumbx*
+* keyword = *terms*
 
   .. parsed-literal::
 
-       *energy/full* = compute all MBX terms with a single call into MBX (serial runs only)
+       *terms* value = *yes* or *no*
+         *yes* = report the individual energy terms (default)
+         *no* = report only the total MBX energy
 
 
 Examples
@@ -27,6 +34,13 @@ Examples
     pair_style      mbx 9.0
     pair_coeff      * * 1 h2o 1 2 2 json mbx.json
     compute         mbx all pair mbx
+
+    # serial run, 1-body, 2-body, and 3-body terms on the GPU
+    # with a CUDA-enabled MBX library
+    atom_modify     sort 0 0.0
+    pair_style      gpumbx 9.0
+    pair_coeff      * * 1 h2o 1 2 2 json mbx.json
+    compute         mbx all pair gpumbx
 
     # For a system involving ch4 (atom types C=1, H=2) and
     # water (atom types O=3, H=4)
@@ -183,22 +197,24 @@ ensuring that the settings are being correctly applied.
 
 .. versionadded:: TBD
 
-The optional *energy/full* keyword makes the pair style request the
-complete MBX energy, forces, and virial with a single call into MBX
-for the whole periodic system, instead of requesting each term
-separately.  When the MBX library was compiled with GPU support, this is
-the only way to have the 1-body, 2-body, and 3-body terms computed on
-the GPU.  This keyword can only be used for runs on a single MPI
-process.  With this keyword, the individual energy terms are not
-available, so :doc:`compute pair mbx <compute_pair>` only provides the
-total MBX energy.  Whether 4-body terms are included depends on the MBX
-version in use.  With this keyword, the MBX setup (including any GPU
-data) is created at the start of a run and reused when the neighbor
-lists are rebuilt.  It is only recreated when the number of atoms
-changes or when LAMMPS reorders the atoms in memory, which it does
-periodically unless atom sorting is turned off with
+Pair style *gpumbx* computes the same interactions as pair style *mbx*,
+but requests the complete MBX energy, forces, and virial with a single
+call into MBX for the whole periodic system, instead of requesting each
+term separately.  When the MBX library was compiled with GPU support,
+this is how the 1-body, 2-body, and 3-body terms are computed on the
+GPU.  Pair style *gpumbx* can only be used for runs on a single MPI
+process.  With *gpumbx*, :doc:`compute pair gpumbx <compute_pair>`
+provides the same 10 energy terms as pair style *mbx*, if the MBX
+library provides the individual terms of a single energy evaluation.
+Otherwise, or if the *terms* keyword is set to *no*, it only provides
+the total MBX energy.  Whether 4-body terms are included depends on
+the MBX version in use.  The MBX setup (including any GPU data) is
+created at the start of a run and reused when the neighbor lists are
+rebuilt.  It is only recreated when the number of atoms changes or
+when LAMMPS reorders the atoms in memory, which it does periodically
+unless atom sorting is turned off with
 :doc:`atom_modify sort 0 0.0 <atom_modify>`, as is recommended with
-this keyword.
+pair style *gpumbx*.
 
 
 Restrictions
@@ -218,7 +234,7 @@ See the warning above for more details.
 
 MBX currently only supports :doc:`processors <processors>` mapping style `xyz`.
 
-The *energy/full* keyword requires a run on a single MPI process.
+Pair style *gpumbx* requires a run on a single MPI process.
 
 MBX is primarily tested to work with `units real` and `atom_style full`. If you encounter
 issues with other unit or atom styles, please contact the MBX developers.
@@ -228,6 +244,12 @@ Related commands
 
 :doc:`pair hybrid/overlay <pair_hybrid>`,
 :doc:`pair coul/exclude <pair_coul>`
+
+Default
+"""""""
+
+For pair style *gpumbx*, *terms* = *yes* if the MBX library provides
+the individual energy terms and *no* otherwise.
 
 -----------
 

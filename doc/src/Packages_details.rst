@@ -1704,6 +1704,7 @@ This package has :ref:`specific installation instructions <mbx>` on the
 
 * ``src/MBX``: filenames -> commands
 * :doc:`pair_style mbx <pair_mbx>`
+* :doc:`pair_style gpumbx <pair_mbx>`
 * ``examples/PACKAGES/mbx``
 * https://mbxsimulations.com/
 

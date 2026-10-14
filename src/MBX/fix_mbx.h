@@ -26,6 +26,7 @@ namespace LAMMPS_NS {
 
 class FixMBX : public Fix {
   friend class PairMBX;
+  friend class PairGPUMBX;
 
  public:
   FixMBX(class LAMMPS *, int, char **);
@@ -158,7 +159,7 @@ class FixMBX : public Fix {
   void mbx_fill_system_information_from_atom();
   void mbx_check_settings();
 
-  // reuse of the MBX instance across neighbor list builds (energy/full only)
+  // reuse of the MBX instance across neighbor list builds (gpumbx only)
   bool force_rebuild;                     // next post_neighbor() must create a new MBX instance
   int mbx_num_reuse;                      // # of neighbor list builds that kept the MBX instance
   std::vector<tagint> mbx_local_seq;      // anchor IDs in the order they were added to MBX
