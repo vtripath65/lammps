@@ -1419,6 +1419,21 @@ then load this plugin at runtime with the :doc:`plugin command
       Both settings are cached and thus retained in the build folder
       (see :ref:`this explanation <err0039>` for details).
 
+      .. code-block:: bash
+
+         -D MBX_GPU=value    # GPU backend of the MBX library to link
+                             # value = none (default) or cuda or hip
+
+      MBX always installs its CPU library ``libmbx``.  MBX configured with
+      ``--enable-cuda`` or ``--enable-hip`` additionally installs
+      ``libmbx_cuda`` or ``libmbx_hip`` with the pkg-config files
+      ``mbx_cuda.pc`` or ``mbx_hip.pc``, which also carry the GPU runtime
+      link flags.  Setting ``MBX_GPU`` to *cuda* or *hip* links LAMMPS to
+      that library, which :doc:`pair style gpumbx <pair_mbx>` requires.
+      This needs a pre-installed MBX: set ``-D DOWNLOAD_MBX=off`` and add
+      the ``lib/pkgconfig`` folder of the MBX installation to the
+      ``PKG_CONFIG_PATH`` environment variable.
+
 
    .. tab:: Traditional make
 

@@ -200,10 +200,12 @@ ensuring that the settings are being correctly applied.
 Pair style *gpumbx* computes the same interactions as pair style *mbx*,
 but requests the complete MBX energy, forces, and virial with a single
 call into MBX for the whole periodic system, instead of requesting each
-term separately.  When the MBX library was compiled with GPU support,
-this is how the 1-body, 2-body, and 3-body terms are computed on the
-GPU.  Pair style *gpumbx* can only be used for runs on a single MPI
-process.  With *gpumbx*, :doc:`compute pair gpumbx <compute_pair>`
+term separately.  This is how the 1-body, 2-body, and 3-body terms are
+computed on the GPU.  It requires LAMMPS to be linked to an MBX GPU
+library (``libmbx_cuda`` or ``libmbx_hip``, see the :ref:`MBX package
+build instructions <mbx>`) and stops with an error when linked to the
+CPU library ``libmbx``.  Pair style *gpumbx* can only be used for runs
+on a single MPI process.  With *gpumbx*, :doc:`compute pair gpumbx <compute_pair>`
 provides the same 10 energy terms as pair style *mbx*, if the MBX
 library provides the individual terms of a single energy evaluation.
 Otherwise, or if the *terms* keyword is set to *no*, it only provides
@@ -234,7 +236,9 @@ See the warning above for more details.
 
 MBX currently only supports :doc:`processors <processors>` mapping style `xyz`.
 
-Pair style *gpumbx* requires a run on a single MPI process.
+Pair style *gpumbx* requires a run on a single MPI process and LAMMPS
+linked to an MBX GPU library, i.e. configured with ``-D MBX_GPU=cuda``
+or ``-D MBX_GPU=hip``.
 
 MBX is primarily tested to work with `units real` and `atom_style full`. If you encounter
 issues with other unit or atom styles, please contact the MBX developers.

@@ -13,6 +13,7 @@
 
 #include "pair_gpumbx.h"
 
+#include "comm.h"
 #include "error.h"
 #include "fix_mbx.h"
 
@@ -24,7 +25,8 @@ using namespace LAMMPS_NS;
 
 /* ----------------------------------------------------------------------
    variant of pair style mbx that obtains energy, forces, and virial from a
-   single MBX energy call; uses the GPU with a CUDA-enabled MBX library
+   single MBX energy call; requires an MBX GPU library (libmbx_cuda or
+   libmbx_hip, selected with -D MBX_GPU=cuda|hip)
 ------------------------------------------------------------------------- */
 
 PairGPUMBX::PairGPUMBX(LAMMPS *lmp) : PairMBX(lmp), energy_terms(0)
@@ -113,4 +115,17 @@ void PairGPUMBX::settings(int narg, char **arg)
 #endif
 
   nextra = energy_terms ? 10 : 0;
+
+  // gpumbx only makes sense with a GPU MBX library; the CPU libmbx reports "none",
+  // and an MBX without GpuBackend() predates the GPU libraries
+
+#ifdef MBX_HAS_GPU_BACKEND
+  if (strcmp(bblock::System::GpuBackend(), "none") == 0)
+    error->all(FLERR, "Pair style gpumbx requires an MBX GPU library (libmbx_cuda or libmbx_hip); "
+                      "reconfigure LAMMPS with -D MBX_GPU=cuda or -D MBX_GPU=hip");
+  if (comm->me == 0)
+    utils::logmesg(lmp, "Pair style gpumbx: MBX GPU backend {}\n", bblock::System::GpuBackend());
+#else
+  error->all(FLERR, "Pair style gpumbx requires an MBX library with GPU support");
+#endif
 }
