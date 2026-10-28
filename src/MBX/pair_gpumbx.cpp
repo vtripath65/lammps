@@ -123,8 +123,15 @@ void PairGPUMBX::settings(int narg, char **arg)
   if (strcmp(bblock::System::GpuBackend(), "none") == 0)
     error->all(FLERR, "Pair style gpumbx requires an MBX GPU library (libmbx_cuda or libmbx_hip); "
                       "reconfigure LAMMPS with -D MBX_GPU=cuda or -D MBX_GPU=hip");
-  if (comm->me == 0)
+  // write MBX's device line to the LAMMPS log instead of letting MBX print it to stderr;
+  // other ranks keep MBX's own stderr line
+
+  if (comm->me == 0) {
     utils::logmesg(lmp, "Pair style gpumbx: MBX GPU backend {}\n", bblock::System::GpuBackend());
+#ifdef MBX_HAS_GPU_DEVICE_INFO
+    utils::logmesg(lmp, "{}\n", bblock::System::GpuDeviceInfo());
+#endif
+  }
 #else
   error->all(FLERR, "Pair style gpumbx requires an MBX library with GPU support");
 #endif
