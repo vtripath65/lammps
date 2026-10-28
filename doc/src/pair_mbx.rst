@@ -236,9 +236,9 @@ See the warning above for more details.
 
 MBX currently only supports :doc:`processors <processors>` mapping style `xyz`.
 
-Pair style *gpumbx* requires a run on a single MPI process and LAMMPS
-linked to an MBX GPU library, i.e. configured with ``-D MBX_GPU=cuda``
-or ``-D MBX_GPU=hip``.
+Pair style *gpumbx* requires a serial (non-MPI) LAMMPS build, run on a
+single process, linked to an MBX GPU library, i.e. configured with
+``-D BUILD_MPI=off`` and ``-D MBX_GPU=cuda`` or ``-D MBX_GPU=hip``.
 
 MBX is primarily tested to work with `units real` and `atom_style full`. If you encounter
 issues with other unit or atom styles, please contact the MBX developers.

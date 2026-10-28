@@ -1432,7 +1432,10 @@ then load this plugin at runtime with the :doc:`plugin command
       that library, which :doc:`pair style gpumbx <pair_mbx>` requires.
       This needs a pre-installed MBX: set ``-D DOWNLOAD_MBX=off`` and add
       the ``lib/pkgconfig`` folder of the MBX installation to the
-      ``PKG_CONFIG_PATH`` environment variable.
+      ``PKG_CONFIG_PATH`` environment variable.  The MBX GPU library does
+      not support MPI, so ``MBX_GPU`` other than *none* also requires a
+      serial LAMMPS build (``-D BUILD_MPI=off``) and an MBX configured
+      without ``--enable-mpi``.
 
 
    .. tab:: Traditional make

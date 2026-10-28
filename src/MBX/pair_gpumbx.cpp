@@ -116,6 +116,11 @@ void PairGPUMBX::settings(int narg, char **arg)
 
   nextra = energy_terms ? 10 : 0;
 
+  // the MBX GPU library does not support MPI
+
+  if (comm->nprocs > 1)
+    error->all(FLERR, "Pair style gpumbx does not support MPI; run on a single MPI rank");
+
   // gpumbx only makes sense with a GPU MBX library; the CPU libmbx reports "none",
   // and an MBX without GpuBackend() predates the GPU libraries
 
@@ -123,8 +128,7 @@ void PairGPUMBX::settings(int narg, char **arg)
   if (strcmp(bblock::System::GpuBackend(), "none") == 0)
     error->all(FLERR, "Pair style gpumbx requires an MBX GPU library (libmbx_cuda or libmbx_hip); "
                       "reconfigure LAMMPS with -D MBX_GPU=cuda or -D MBX_GPU=hip");
-  // write MBX's device line to the LAMMPS log instead of letting MBX print it to stderr;
-  // other ranks keep MBX's own stderr line
+  // write MBX's device line to the LAMMPS log instead of letting MBX print it to stderr
 
   if (comm->me == 0) {
     utils::logmesg(lmp, "Pair style gpumbx: MBX GPU backend {}\n", bblock::System::GpuBackend());

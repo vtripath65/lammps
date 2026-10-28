@@ -28,6 +28,10 @@ if(MBX_GPU STREQUAL "none")
 else()
   set(MBX_MODULE mbx_${MBX_GPU}${MBX_SUFFIX})
 endif()
+if(BUILD_MPI AND NOT (MBX_GPU STREQUAL "none"))
+  message(FATAL_ERROR "MBX_GPU=${MBX_GPU} requires a serial LAMMPS build: the MBX GPU library does not "
+          "support MPI. Reconfigure with -D BUILD_MPI=off")
+endif()
 
 set(MBX_CONFIG_CC  ${CMAKE_C_COMPILER})
 set(MBX_CONFIG_CXX  ${CMAKE_CXX_COMPILER})
